@@ -1,5 +1,7 @@
 package nachos.threads;
 
+import java.util.LinkedList;
+
 import nachos.machine.*;
 
 /**
@@ -14,6 +16,10 @@ public class Communicator {
      * Allocate a new communicator.
      */
     public Communicator() {
+    	communicatorLock = new Lock();
+    	speakerCondition = new Condition(communicatorLock);
+		listenerCondition = new Condition(communicatorLock);
+		hasMessage = false;
     }
 
     /**
@@ -27,6 +33,25 @@ public class Communicator {
      * @param	word	the integer to transfer.
      */
     public void speak(int word) {
+    	communicatorLock.acquire();
+    	message = word;
+    	hasMessage = true;
+    	if(listenerQueue.isEmpty()){
+    		speakerQueue.offer(KThread.currentThread());
+    		speakerCondition.sleep();
+    		
+    		speakerQueue.poll();
+    		System.out.println(KThread.currentThread() + " speaks " + word);
+    		communicatorLock.release();
+    		return;    		
+    	}
+    	else{
+    		listenerCondition.wake();
+    		listenerQueue.poll();
+    		System.out.println(KThread.currentThread() + " speaks " + word);
+    		communicatorLock.release();
+    		return;	
+    	}
     }
 
     /**
@@ -36,6 +61,33 @@ public class Communicator {
      * @return	the integer transferred.
      */    
     public int listen() {
-	return 0;
+    	communicatorLock.acquire();
+    	if(speakerQueue.isEmpty()){
+    		listenerQueue.offer(KThread.currentThread());
+    		listenerCondition.sleep();
+    		
+    		listenerQueue.poll();
+    		System.out.println(KThread.currentThread() + " listens " + message);
+    		hasMessage = false;
+    		communicatorLock.release();
+    		return message;
+    	}
+    	else{
+    		speakerCondition.wake();
+    		speakerQueue.poll();
+    		
+    		System.out.println(KThread.currentThread() + " listens " + message);
+    		hasMessage = false;
+    		communicatorLock.release();
+    		return message;
+    	}
     }
+    
+    private Lock communicatorLock;
+    private Condition speakerCondition;
+    private Condition listenerCondition;
+    private LinkedList<KThread> speakerQueue = new LinkedList<KThread>();
+    private LinkedList<KThread> listenerQueue = new LinkedList<KThread>();
+    boolean hasMessage;
+    int message;
 }
